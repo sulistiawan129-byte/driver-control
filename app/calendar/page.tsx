@@ -45,6 +45,13 @@ export default function CalendarPage() {
     if (rows) setDrivers(rows);
   }
 
+  // Filter data sesuai pilihan — sama logiknya dengan CalendarView
+  const filteredData = data.filter((d) => {
+    const matchDriver = !selectedDriver || d.driver_id === selectedDriver;
+    const matchPlant = !selectedPlant || d.master_driver?.plant === selectedPlant;
+    return matchDriver && matchPlant;
+  });
+
   return (
     <div>
       <PageHeader
@@ -109,7 +116,7 @@ export default function CalendarPage() {
                 ))}
               </select>
 
-              {/* Driver filter (visible in per-driver mode) */}
+              {/* Driver filter */}
               {mode === "per-driver" && (
                 <select
                   value={selectedDriver}
@@ -147,28 +154,44 @@ export default function CalendarPage() {
           />
         )}
 
-        {/* Stats below calendar */}
+        {/* Stats — sekarang ikut filter yang aktif */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             {
               label: "Total Data",
-              value: data.length,
+              value: filteredData.length,
               color: "text-slate-800",
+              sub: selectedDriver || selectedPlant ? "hasil filter" : "semua data",
             },
             {
               label: "Regular",
-              value: data.filter((d) => d.status_kerja === "Regular").length,
+              value: filteredData.filter((d) => d.status_kerja === "Regular").length,
               color: "text-green-700",
+              sub: "hari kerja normal",
             },
             {
               label: "Overtime",
-              value: data.filter((d) => d.status_kerja === "Overtime").length,
+              value: filteredData.filter((d) => d.status_kerja === "Overtime").length,
               color: "text-blue-700",
+              sub: "hari overtime",
             },
             {
-              label: "Driver Aktif",
-              value: drivers.length,
+              label: selectedDriver
+                ? "Driver Dipilih"
+                : selectedPlant
+                  ? "Driver di Plant"
+                  : "Driver Aktif",
+              value: selectedDriver
+                ? 1
+                : selectedPlant
+                  ? drivers.filter((d) => d.plant === selectedPlant).length
+                  : drivers.length,
               color: "text-indigo-700",
+              sub: selectedDriver
+                ? drivers.find((d) => d.id === selectedDriver)?.nama_driver ?? ""
+                : selectedPlant
+                  ? selectedPlant
+                  : "terdaftar",
             },
           ].map((stat) => (
             <div
@@ -179,6 +202,7 @@ export default function CalendarPage() {
               <p className={cn("text-xl font-bold mt-0.5", stat.color)}>
                 {stat.value}
               </p>
+              <p className="text-xs text-slate-400 mt-0.5 truncate">{stat.sub}</p>
             </div>
           ))}
         </div>

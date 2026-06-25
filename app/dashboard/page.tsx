@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { supabase, DriverControlWithDriver } from "@/lib/supabase";
 import SummaryCard from "@/components/SummaryCard";
 import DataTable from "@/components/DataTable";
@@ -19,72 +19,47 @@ import { formatJam, getCurrentMonthYear, getMonthName } from "@/lib/utils";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DriverControlWithDriver[]>([]);
+  const [drivers, setDrivers] = useState<{ id: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalDriver, setTotalDriver] = useState(0);
-  const [totalRegular, setTotalRegular] = useState(0);
-  const [totalOvertime, setTotalOvertime] = useState(0);
-  const [totalJamOvertime, setTotalJamOvertime] = useState(0);
 
   const { month, year } = getCurrentMonthYear();
 
-  const fetchAll = useCallback(async () => {
+  async function fetchData() {
     setLoading(true);
 
-    // Fetch semua data driver_control
+    // Fetch semua data kehadiran beserta info driver (sama persis dengan kalender)
     const { data: rows } = await supabase
       .from("driver_control")
       .select("*, master_driver(*)")
-      .order("tanggal", { ascending: false })
-      .limit(100);
+      .order("tanggal", { ascending: false });
 
-    if (rows) {
-      setData(rows as DriverControlWithDriver[]);
-    }
+    if (rows) setData(rows as DriverControlWithDriver[]);
 
-    // Fetch total driver
-    const { count: driverCount } = await supabase
+    // Fetch daftar driver (sama persis dengan kalender)
+    const { data: driverRows } = await supabase
       .from("master_driver")
-      .select("*", { count: "exact", head: true });
+      .select("id")
+      .order("nama_driver");
 
-    setTotalDriver(driverCount ?? 0);
-
-    // Fetch data bulan ini
-    const firstDay = `${year}-${String(month).padStart(2, "0")}-01`;
-    const lastDay = `${year}-${String(month).padStart(2, "0")}-31`;
-
-    const { data: monthData } = await supabase
-      .from("driver_control")
-      .select("status_kerja, overtime_jam")
-      .gte("tanggal", firstDay)
-      .lte("tanggal", lastDay);
-
-    if (monthData) {
-      setTotalRegular(monthData.filter((r) => r.status_kerja === "Regular").length);
-      setTotalOvertime(monthData.filter((r) => r.status_kerja === "Overtime").length);
-      setTotalJamOvertime(
-        Math.round(
-          monthData.reduce((acc, r) => acc + (r.overtime_jam ?? 0), 0) * 100
-        ) / 100
-      );
-    }
+    if (driverRows) setDrivers(driverRows);
 
     setLoading(false);
-  }, [month, year]);
+  }
 
   useEffect(() => {
-    fetchAll();
+    fetchData();
+  }, []);
 
-    // Auto refresh setiap 30 detik
-    const interval = setInterval(fetchAll, 30000);
+  // Hitung stats langsung dari data — sama persis seperti kalender
+  const bulanStr = `${year}-${String(month).padStart(2, "0")}`;
+  const dataBuilanIni = data.filter((r) => r.tanggal.startsWith(bulanStr));
 
-    // Refresh saat balik ke tab ini
-    window.addEventListener("focus", fetchAll);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", fetchAll);
-    };
-  }, [fetchAll]);
+  const totalDriver = drivers.length;
+  const totalRegular = dataBuilanIni.filter((r) => r.status_kerja === "Regular").length;
+  const totalOvertime = dataBuilanIni.filter((r) => r.status_kerja === "Overtime").length;
+  const totalJamOvertime = Math.round(
+    dataBuilanIni.reduce((acc, r) => acc + (r.overtime_jam ?? 0), 0) * 100
+  ) / 100;
 
   async function handleDelete(id: string) {
     if (!confirm("Hapus data kehadiran ini?")) return;
@@ -96,7 +71,7 @@ export default function DashboardPage() {
       toast.error("Gagal menghapus data");
     } else {
       toast.success("Data berhasil dihapus");
-      fetchAll();
+      fetchData();
     }
   }
 
@@ -112,7 +87,7 @@ export default function DashboardPage() {
         actions={
           <div className="flex gap-2">
             <button
-              onClick={fetchAll}
+              onClick={fetchData}
               className="flex items-center gap-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-2 rounded-xl text-sm font-medium transition-colors"
             >
               <RefreshCw className="w-4 h-4" />
